@@ -130,7 +130,7 @@ def test_callback_tags():
     }
     # no default pipeline is registered
     assert dummyscanner.registry[_sentiel] == {}
-    # but it is registered for each of the tags
+    # but pipeline is registered for each of the tags
     assert dummyscanner.registry['A']['bar'] == registered_pipeline
     assert dummyscanner.registry['B']['bar'] == registered_pipeline
 
@@ -138,7 +138,7 @@ def test_callback_tags():
 def test_callback_tag_twice():
     @pipeline(tags=['A'])
     def bar():
-        pass
+        pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
     bar.callback(dummyscanner, 'bar', bar)

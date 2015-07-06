@@ -1,15 +1,17 @@
-"""Usage
+"""Example usage
 
 Configure the pipeline
 
->>> cp = PipelineConfigurator()
->>> cp.add_error_handling_strategy('exponential', lambda task: None)
->>> cp.add_mapper('related_objects', lambda f, x, s: s['related_objects'])
->>> cp.add_reducer('merge', lambda xsdm: None)
+>>> from celery_capillary import PipelineConfigurator
+>>> pc = PipelineConfigurator()
+>>> pc.add_error_handling_strategy('exponential', lambda task: None)
+>>> pc.add_mapper('related_objects', lambda f, x, s: s['related_objects'])
+>>> pc.add_reducer('merge', lambda xsdm: None)
 
 Create pipelines based on different defaults
 
->>> ap_pipeline = cp.make_pipeline_from_defaults(
+>>> from celery_capillary import make_pipeline_from_defaults
+>>> ap_pipeline = make_pipeline_from_defaults(
 >>>     tags=["AP"]
 >>> )
 
@@ -37,7 +39,7 @@ Basic usage
 >>>     return {'summary': sdm['body_content'][:30]}
 
 Execute the pipeline
->>> cp.run_pipeline(feedparser_feed_item, xml_feed_item, {}, tagged_as=['AP'])
+>>> pc.run_pipeline(feedparser_feed_item, xml_feed_item, {}, tagged_as=['AP'])
 
 """
 
@@ -63,6 +65,15 @@ def pipeline(**kwargs):
     :param after list/string: On what pipeline elements does this element depend on
     :param mapper string/function: (only for is_parallel)
     :param reducer string/function: (only for is_parallel)
+
+    Example::
+
+    >>> @pipeline(
+    >>>     after="somepipeline",
+    >>> )
+    >>> def foobar(self, *args):
+    >>>     raise NotImplemented
+
     """
 
     new_name = kwargs.pop('name', None)
@@ -113,7 +124,7 @@ def make_pipeline_from_defaults(**kw):
 
     Example::
 
-    >>> ap_pipeline = cp.make_pipeline_from_defaults(
+    >>> ap_pipeline = make_pipeline_from_defaults(
     >>>     tags=["AP"]
     >>> )
 
