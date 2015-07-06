@@ -54,6 +54,10 @@ logger = get_logger()
 _sentiel = object()
 
 
+class AbortPipeline(Exception):
+    """Raised if the pipeline should be aborted all together."""
+
+
 def pipeline(**kwargs):
     """
     Decorator for configuring pipeline flow declaratively.
