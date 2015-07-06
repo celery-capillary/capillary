@@ -2,7 +2,8 @@ from pytest import raises
 from collections import defaultdict
 
 import celery_capillary
-from celery_capillary import make_pipeline_from_defaults, PipelineConfigurator, pipeline, _sentiel
+from celery_capillary import make_pipeline_from_defaults, PipelineConfigurator
+from celery_capillary import pipeline, _sentiel
 
 
 class DummyScanner(object):
@@ -11,7 +12,7 @@ class DummyScanner(object):
 
 
 def test_make_pipeline_from_defaults():
-    assert make_pipeline_from_defaults()().__name__ == "decorator"
+    assert make_pipeline_from_defaults()().__code__ == pipeline().__code__
 
 
 def test_add_error_handling_strategy():
@@ -62,7 +63,7 @@ def test_add_reducer_twice():
 def test_callback():
     @pipeline()
     def bar():
-        pass
+        pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
     bar.callback(dummyscanner, 'bar', bar)
@@ -82,7 +83,7 @@ def test_callback():
 def test_callback_name():
     @pipeline(name='foo')
     def bar():
-        pass
+        pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
     bar.callback(dummyscanner, 'bar', bar)
@@ -102,7 +103,7 @@ def test_callback_name():
 def test_callback_twice():
     @pipeline()
     def bar():
-        pass
+        pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
     bar.callback(dummyscanner, 'bar', bar)
@@ -113,7 +114,7 @@ def test_callback_twice():
 def test_callback_tags():
     @pipeline(tags=['A', 'B'])
     def bar():
-        pass
+        pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
     bar.callback(dummyscanner, 'bar', bar)

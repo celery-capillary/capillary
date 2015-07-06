@@ -183,7 +183,7 @@ class PipelineConfigurator(object):
             raise ValueError('{} reducer already registered'.format(name))
         self.reducers[name] = callback
 
-    def run_pipeline(self, *args, **kwargs):
+    def run_pipeline(self, args, kwargs, **options):
         """
         Executes the pipeline and returns the chain of tasks used.
 
@@ -196,22 +196,32 @@ class PipelineConfigurator(object):
         # TODO: how is the output handled
 
         :param args: Arguments passed as an input to the pipeline.
+        :param kwargs: Keyword arguments passed as an input to the pipeline.
         :param tagged_as list: TODO
         :returns: TODO
 
         .. warning:: Currently `run_pipeline` supports only one map/reduce
                      implemented as a chord in Celery.
         """
+        tasks = self._get_pipeline(**options)
 
-    def prettyprint_pipeline(self, *args, **kwargs):
+    def prettyprint_pipeline(self, args, kwargs, **options):
         """
         TODO
         """
-        tagged_as = kwargs.pop('tagged_as', [])
+        tasks = self._get_pipeline(**options)
+        print tasks
+
+    def _get_pipeline(self, **options):
+        tagged_as = options.pop('tagged_as', [])
+
+        # get tasks for default tag
         tasks = dict(self.registry[_sentiel])
+
+        # override tasks by adding tasks in correct order
         for tag in tagged_as:
             if tag not in self.registry:
                 raise ValueError('No pipelines for a tag {}'.format(tag))
             tasks.update(self.registry[tag])
 
-        # TODO: figure out the order of tasks
+        # TODO: now that we have the tasks, figure out the order of tasks
