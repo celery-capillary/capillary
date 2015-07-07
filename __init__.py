@@ -51,9 +51,16 @@ from collections import defaultdict
 import venusian
 from structlog import get_logger
 
+# from .tasks import serial_runner
+from celery import group
+import networkx as nx
 
 logger = get_logger()
 _sentiel = object()
+
+
+class DependencyError(Exception):
+    """Raised when there are problems in the shape of the pipeline"""
 
 
 class AbortPipeline(Exception):
@@ -90,8 +97,13 @@ def pipeline(**kwargs):
     mapper = kwargs.pop('mapper', None)
     reducer = kwargs.pop('reducer', None)
 
+    # Expect to deal with lists
+    if isinstance(after, basestring):
+        after = [after]
+
     if kwargs:
-        raise ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
+        print ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
+        # raise ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
 
     def decorator(wrapped):
         def callback(scanner, name, func):
@@ -117,6 +129,10 @@ def pipeline(**kwargs):
                 if name in untagged:
                     raise ValueError('{} pipeline already exists without tags'.format(name))
                 untagged[name] = info
+        # TODO, does this muck up debug symbols? Seems OK
+        # Avoid circular import, but this might not always be the celery app
+        from massimport.celery import app
+        wrapped = app.task(bind=True)(wrapped)
         venusian.attach(wrapped, callback, 'pipeline')
         wrapped.callback = callback  # for testing purposes
         return wrapped
@@ -204,12 +220,20 @@ class PipelineConfigurator(object):
         :param args: Arguments passed as an input to the pipeline.
         :param kwargs: Keyword arguments passed as an input to the pipeline.
         :param tagged_as list: TODO
-        :returns: TODO
+        :returns: AsyncResult
 
         .. warning:: Currently `run_pipeline` supports only one map/reduce
                      implemented as a chord in Celery.
         """
         tasks = self._get_pipeline(**options)
+
+        # now that we have the tasks, figure out the order of tasks
+        tree = build_tree(tasks, args=args, kwargs=kwargs)
+
+        # Run the tasks
+        # TODO - this really should have a final reduce step (which will normally save to the item cache and
+        # Trigger notifycollector
+        return tasks.delay()
 
     def prettyprint_pipeline(self, args, kwargs, **options):
         """
@@ -222,6 +246,7 @@ class PipelineConfigurator(object):
         tagged_as = options.pop('tagged_as', [])
 
         # get tasks for default tag
+        # Explicit dict for copy? amcm
         tasks = dict(self.registry[_sentiel])
 
         # override tasks by adding tasks in correct order
@@ -230,4 +255,94 @@ class PipelineConfigurator(object):
                 raise ValueError('No pipelines for a tag {}'.format(tag))
             tasks.update(self.registry[tag])
 
-        # TODO: now that we have the tasks, figure out the order of tasks
+        return tasks
+
+
+def build_tree(tasks, args, kwargs, serial_reducer=None):
+    """Accepts any number of tasks as returned by _get_pipeline.
+
+    :param tasks: dictionary of str:info where str is the name of the task, info is from the registry
+    :param args: list of args for each task
+    :param kwargs: dict of kwargs for each task
+    :param serial_reducer: optional task that accepts a list of results and reduces them
+
+    :returns: A celery.group of the independent task chains
+    :rtype: celery.group
+
+    :raises DependencyError
+    """
+
+    # Find dependencies - directed graph of node names
+    dependencies = nx.DiGraph()
+
+    # Add nodes
+    for name, info in tasks.items():
+        dependencies.add_node(name, info=info)
+
+    # Add edges
+    for name, info in tasks.items():
+        for req in info['after']:
+            if req not in dependencies:
+                raise DependencyError(
+                    '"{}" was not found in this set of tasks. name="{}" info="{}"'.format(req, name, info))
+
+            dependencies.add_edge(req, name)
+
+    # Check for circular dependencies
+    try:
+        cycle = nx.simple_cycles(dependencies).next()
+        raise DependencyError('Circular dependencies detected: {}'.format(cycle))
+    except StopIteration:
+        # Good - didn't want any cycles
+        pass
+
+    # Joins (merge multiple tasks) have more than one edge in
+    joins = [n for n, d in dependencies.in_degree_iter() if d > 1]
+
+    # Don't support joins right now, one reducer at the end of the chain
+    if joins:
+        raise DependencyError('Multiple after values not currently supported joins="{}"'.format(joins))
+
+    # TODO - even with joins this could be a challenge
+    # Can't handle "N" shapes, so check for those
+    # Descendants of forks, cannot join from outside.
+
+    # Make the signatures
+    for name, data in dependencies.nodes(data=True):
+        data['task'] = data['info']['func'].s(*args, **kwargs)
+
+    # Condense tree
+    condense_tree(dependencies)
+
+    # Graph is now a set of independent chains.
+    assert len(dependencies.edges()) == 0
+
+    return group(*[data['task'] for n, data in dependencies.nodes(data=True)])
+
+
+def condense_tree(graph):
+    """Working from the bottom up, replace each node with a chain to its
+    descendant, or celery.Group of descendants.
+
+    :param graph: Will be mutated to replace nodes. Expected to result in a graph with no edges.
+    :type graph: networkx.DiGraph
+
+    :returns: None
+    """
+
+    # traverse the tree from the depth upwards
+    # This ensures we'll hit the most deaply nested groups first
+    # explicit list so we can remove nodes while itterating
+    for name in list(nx.dfs_postorder_nodes(graph)):
+        # If no children
+        if len(graph[name]) == 0:
+            # Skip processing
+            continue
+
+        # Since the node has Children
+        # Those children need to be wrapped into a group
+        # Chould be a group of 1 item, that's OK, evens out the interface for later tasks
+        graph.node[name]['task'] |= group(*[graph.node[n]['task'] for n in graph.successors(name)])
+
+        # Then remove all children from the graph
+        graph.remove_nodes_from(graph[name].keys())
