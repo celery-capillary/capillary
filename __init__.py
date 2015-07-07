@@ -43,6 +43,8 @@ Execute the pipeline
 
 """
 
+# TODO: How to abort the pipeline? Just raise "AbortPipeline" and log it
+
 from functools import partial
 from collections import defaultdict
 
