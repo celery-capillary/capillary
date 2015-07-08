@@ -132,7 +132,7 @@ def pipeline(**kwargs):
                 if name in untagged:
                     raise ValueError('{} pipeline already exists without tags'.format(name))
                 untagged[name] = info
-        # TODO: move this to the runner part
+        # TODO: move this to the callback
         from massimport.celery import app
         wrapped = app.task(bind=True)(wrapped)
         venusian.attach(wrapped, callback, 'pipeline')
