@@ -78,6 +78,8 @@ def pipeline(**kwargs):
     :param after list/string: On what pipeline elements does this element depend on
     :param mapper string/function: (only for is_parallel)
     :param reducer string/function: (only for is_parallel)
+    :param requires_parameter list: Names of parameters that will be passed as keyword arguments
+                                    to this element
 
     Example::
 
@@ -96,14 +98,14 @@ def pipeline(**kwargs):
     after = kwargs.pop('after', [])
     mapper = kwargs.pop('mapper', None)
     reducer = kwargs.pop('reducer', None)
+    requires_parameter = kwargs.pop('requires_parameter', [])
 
     # Expect to deal with lists
     if isinstance(after, basestring):
         after = [after]
 
     if kwargs:
-        print ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
-        # raise ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
+        raise ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
 
     def decorator(wrapped):
         def callback(scanner, name, func):
@@ -116,6 +118,7 @@ def pipeline(**kwargs):
                 'after': after,
                 'mapper': mapper,
                 'reducer': reducer,
+                'requires_parameter': requires_parameter,
             }
             logger.debug('@pipeline registered', name=name, info=info, tags=tags)
             if tags:
@@ -129,8 +132,7 @@ def pipeline(**kwargs):
                 if name in untagged:
                     raise ValueError('{} pipeline already exists without tags'.format(name))
                 untagged[name] = info
-        # TODO, does this muck up debug symbols? Seems OK
-        # Avoid circular import, but this might not always be the celery app
+        # TODO: move this to the runner part
         from massimport.celery import app
         wrapped = app.task(bind=True)(wrapped)
         venusian.attach(wrapped, callback, 'pipeline')

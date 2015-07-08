@@ -78,7 +78,8 @@ def test_callback():
         'is_parallel': False,
         'mapper': None,
         'name': 'bar',
-        'reducer': None
+        'reducer': None,
+        'requires_parameter': [],
     } == dummyscanner.registry[_sentiel]['bar']
 
 
@@ -98,7 +99,8 @@ def test_callback_name():
         'is_parallel': False,
         'mapper': None,
         'name': 'foo',
-        'reducer': None
+        'reducer': None,
+        'requires_parameter': [],
     } == dummyscanner.registry[_sentiel]['foo']
 
 
@@ -129,7 +131,8 @@ def test_callback_tags():
         'is_parallel': False,
         'mapper': None,
         'name': 'bar',
-        'reducer': None
+        'reducer': None,
+        'requires_parameter': [],
     }
     # no default pipeline is registered
     assert dummyscanner.registry[_sentiel] == {}
