@@ -132,7 +132,9 @@ def pipeline(**kwargs):
                 if name in untagged:
                     raise ValueError('{} pipeline already exists without tags'.format(name))
                 untagged[name] = info
+
         # TODO: move this to the callback
+        # maybe/maybe not, tasks need to be registered so celery worker can find them
         from massimport.celery import app
         wrapped = app.task(bind=True)(wrapped)
         venusian.attach(wrapped, callback, 'pipeline')
@@ -235,14 +237,18 @@ class PipelineConfigurator(object):
         # Run the tasks
         # TODO - this really should have a final reduce step (which will normally save to the item cache and
         # Trigger notifycollector
-        return tasks.delay()
+
+        # Kick things off with an empty accumulator
+        return tree.delay(args=({},))
 
     def prettyprint_pipeline(self, args, kwargs, **options):
         """
-        TODO
+        TODO -- Which of these is more useful, or some combination.
         """
         tasks = self._get_pipeline(**options)
         print tasks
+        tree = build_tree(tasks, args=args, kwargs=kwargs)
+        print tree
 
     def _get_pipeline(self, **options):
         tagged_as = options.pop('tagged_as', [])
@@ -311,7 +317,10 @@ def build_tree(tasks, args, kwargs, serial_reducer=None):
 
     # Make the signatures
     for name, data in dependencies.nodes(data=True):
-        data['task'] = data['info']['func'].s(*args, **kwargs)
+        data['task'] = data['info']['func'].s(
+            *args,
+            **{k: v for k, v in kwargs.items() if k in data['info'].get('requires_parameter', [])}
+        )
 
     # Condense tree
     condense_tree(dependencies)

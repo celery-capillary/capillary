@@ -1,4 +1,5 @@
 from massimport.celery import app
+from collections import Mapping
 
 
 @app.task(bind=True)
@@ -27,20 +28,28 @@ def list_to_set_reducer(self, groups):
 
 @app.task(bind=True)
 def dict_reducer(self, items):
-    """Combine a serice of dictonaries into a single dict
+    """Combine a series of dictionaries into a single dict
 
-    :param *items: List of dictionaries
+    :param items: Recursive structure containing Lists of dictionaries or lists of the recursive structure
 
     :returns dict: Single combined dictionary
     """
 
     print 'dict_reducer: {}'.format(items)
 
-    # TODO: list values should .extend, not clobber
+    # if items is a mapping, just return it
+    if isinstance(items, Mapping):
+        return items
+
     res = {}
     for i in items:
-        if i:
+        # If i is dict-like, update the result
+        if isinstance(i, Mapping):
+            # TODO: list values should .extend, not clobber
             res.update(i)
+        else:
+            # Aught to be a list, recurse
+            res.update(dict_reducer(i))
     return res
 
 
