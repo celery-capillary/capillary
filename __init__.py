@@ -246,7 +246,6 @@ class PipelineConfigurator(object):
         TODO -- Which of these is more useful, or some combination.
         """
         tasks = self._get_pipeline(**options)
-        print tasks
         tree = build_tree(tasks, args=args, kwargs=kwargs)
         print tree
 
