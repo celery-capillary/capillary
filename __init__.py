@@ -43,6 +43,7 @@ Execute the pipeline
 
 """
 
+import re
 from functools import partial
 from collections import defaultdict
 
@@ -186,7 +187,7 @@ class PipelineConfigurator(object):
         self.reducers = {}
 
         scanner = venusian.Scanner(registry=defaultdict(dict), celery_app=celery_app)
-        scanner.scan(package, categories=['pipeline'])
+        scanner.scan(package, categories=['pipeline'], ignore=[re.compile('tests$').search])
         self.registry = scanner.registry
 
     def add_error_handling_strategy(self, name, callback):
