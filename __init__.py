@@ -69,7 +69,8 @@ class AbortPipeline(Exception):
 
 def pipeline(**kwargs):
     """
-    Decorator for configuring pipeline flow declaratively.
+    Decorator for configuring pipeline flow declaratively. Applying @pipeline to a function
+    makes it a celery function too (once PipelineConfigurator is initialized).
 
     :param name string: Unique identifier of the pipeline element (defaults to the decorated function name)
     :param tags list:
@@ -80,6 +81,7 @@ def pipeline(**kwargs):
     :param reducer string/function: (only for is_parallel)
     :param requires_parameter list: Names of parameters that will be passed as keyword arguments
                                     to this element
+    :param celery_task_kwargs dict: Keyword arguments passed to the celery task.
 
     Example::
 
@@ -99,6 +101,7 @@ def pipeline(**kwargs):
     mapper = kwargs.pop('mapper', None)
     reducer = kwargs.pop('reducer', None)
     requires_parameter = kwargs.pop('requires_parameter', [])
+    celery_task_kwargs = kwargs.pop('celery_task_kwargs', {})
 
     # Expect to deal with lists
     if isinstance(after, basestring):
@@ -109,6 +112,9 @@ def pipeline(**kwargs):
 
     def decorator(wrapped):
         def callback(scanner, name, func):
+            # make the function also a celery function
+            func = scanner.celery_app.task(bind=True, **celery_task_kwargs)(func)
+
             name = new_name or name
             info = {
                 'func': func,
@@ -120,7 +126,12 @@ def pipeline(**kwargs):
                 'reducer': reducer,
                 'requires_parameter': requires_parameter,
             }
-            logger.debug('@pipeline registered', name=name, info=info, tags=tags)
+            logger.debug(
+                '@pipeline registered',
+                name=name,
+                info=info,
+                tags=tags,
+            )
             if tags:
                 for tag in tags:
                     tagged = scanner.registry[tag]
@@ -133,10 +144,6 @@ def pipeline(**kwargs):
                     raise ValueError('{} pipeline already exists without tags'.format(name))
                 untagged[name] = info
 
-        # TODO: move this to the callback
-        # maybe/maybe not, tasks need to be registered so celery worker can find them
-        from massimport.celery import app
-        wrapped = app.task(bind=True)(wrapped)
         venusian.attach(wrapped, callback, 'pipeline')
         wrapped.callback = callback  # for testing purposes
         return wrapped
@@ -180,7 +187,7 @@ class PipelineConfigurator(object):
         self.mappers = {}
         self.reducers = {}
 
-        scanner = venusian.Scanner(registry=defaultdict(dict))
+        scanner = venusian.Scanner(registry=defaultdict(dict), celery_app=celery_app)
         scanner.scan(package, categories=['pipeline'])
         self.registry = scanner.registry
 
