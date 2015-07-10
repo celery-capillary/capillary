@@ -1,3 +1,4 @@
+import mock
 import networkx as nx
 from pytest import raises
 from collections import defaultdict
@@ -11,6 +12,8 @@ from celery_capillary.tasks import concat
 class DummyScanner(object):
     def __init__(self):
         self.registry = defaultdict(dict)
+        self.celery_app = mock.Mock()
+        self.celery_app.task().side_effect = lambda f: f
 
 
 def test_make_pipeline_from_defaults():
