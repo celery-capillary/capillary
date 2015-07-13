@@ -1,5 +1,6 @@
 from massimport.celery import app
 from collections import Mapping
+from celery import group
 
 
 @app.task(bind=True)
@@ -27,7 +28,7 @@ def list_to_set_reducer(self, groups):
 
 
 @app.task(bind=True)
-def dict_reducer(self, items):
+def dict_reducer(self, items, extra=None):
     """Combine a series of dictionaries into a single dict
 
     :param items: Recursive structure containing Lists of dictionaries or lists of the recursive structure
@@ -36,6 +37,8 @@ def dict_reducer(self, items):
     """
 
     print 'dict_reducer: {}'.format(items)
+    if extra:
+        print 'dict_reducer: got some extra: {}'.format(extra)
 
     # if items is a mapping, just return it
     if isinstance(items, Mapping):
@@ -53,28 +56,47 @@ def dict_reducer(self, items):
     return res
 
 
-@app.task(bind=True)
-def generator(self, arg):
-    """Just return the arg as the results."""
-    print 'generate: {}'.format(arg)
-    return arg
-
-
 # TODO - this is a bit hinky, but solves the kickoff problem
 @app.task(bind=True)
 def concat(self, acc, arg=None, ):
-    """Just return the arg appened to the accumulator.
+    """Just return the arg appended to the accumulator.
 
     One positional should be the arg.
-    Two positionsals should be accumulator, arg
+    Two positional arguments should be accumulator, arg
 
     :param arg: object to append to a list
-    :param acc: optional list to appened to, if missing new list will be created"""
+    :param acc: optional list to append to, if missing new list will be created"""
     if arg is None:
         arg = acc
         acc = []
     print 'concat({}, {})'.format(acc, arg)
     return acc + [arg]
+
+
+@app.task(bind=True)
+def generator(self, arg, *args, **kwargs):
+    """Just return the first arg as the results. Ignores any other params"""
+    print 'generator: {}'.format(arg)
+    return arg
+
+
+@app.task(bind=True)
+def lazy_async_apply_map(self, items, d, runner):
+    """use mapper to extract items from d, process them with runner, then
+    reduce the results with reducer
+
+    :param items: itterable of arguments for the runner
+    :param d: data to operate on (probably returned by a previous task)
+    :param runner: task signature to execute on each item. def runner(item, data, *a, **kw)
+    """
+
+    subtasks = []
+    for item in items:
+        r = runner.clone()
+        r.args = (item, d) + r.args
+        subtasks.append(r)
+
+    raise self.replace(group(*subtasks))
 
 
 @app.task(bind=True)

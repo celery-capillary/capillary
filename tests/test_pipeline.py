@@ -5,8 +5,8 @@ from collections import defaultdict
 
 import celery_capillary
 from celery_capillary import make_pipeline_from_defaults, PipelineConfigurator
-from celery_capillary import pipeline, _sentiel, condense_tree
-from celery_capillary.tasks import concat
+from celery_capillary import pipeline, _sentiel
+from celery_capillary.tasks import concat, dict_reducer, generator, lazy_async_apply_map
 
 
 class DummyScanner(object):
@@ -162,6 +162,7 @@ def test_pipeline_wrong_arg():
 
 
 def get_test_tree():
+    pc = PipelineConfigurator(None, celery_capillary)
     g = nx.DiGraph()
     g.add_nodes_from([(n, {'task': concat.s(n)}) for n in xrange(1, 11)])
     g.add_edges_from([
@@ -176,7 +177,7 @@ def get_test_tree():
     ])
 
     # When the graph is processed
-    condense_tree(g)
+    pc._condense_tree(g)
     # Then only 2 nodes remain
     assert len(g.nodes()) == 2
 
@@ -200,4 +201,23 @@ def test_condense_tree():
     ]
 
     # For further inspection
+    return res
+
+
+def test_lazy_async_apply_map():
+    d = {
+        'test_key': 3,
+        'list_me': [{1: 'test'}, {2: 'test'}, {3: 'test'}]
+    }
+    # assume a mapper task generated these items
+    items = [{1: 'test'}, {2: 'test'}, {3: 'test'}]
+    t = lazy_async_apply_map.s(items, d, runner=generator.s()) | concat.s() | dict_reducer.s()
+    res = t.apply()
+    # assert res.get() == {
+    #     'test_key': 3,
+    #     'list_me': [{1: 'test'}, {2: 'test'}, {3: 'test'}],
+    #     1: 'test',
+    #     2: 'test',
+    #     3: 'test',
+    # }
     return res
