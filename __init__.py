@@ -57,6 +57,9 @@ import networkx as nx
 logger = get_logger()
 _sentiel = object()
 
+#: constant to note a pipeline element that is ran the last by specifying after=ALL
+ALL = object()
+
 
 class DependencyError(Exception):
     """Raised when there are problems in the shape of the pipeline"""
@@ -75,7 +78,8 @@ def pipeline(**kwargs):
     :param tags list:
     :param error_handling_strategy string: (only for is_parallel)
     :param is_parallel boolean: Should the pipeline element be ran in separate Celery task in parallel
-    :param after list/string: On what pipeline elements does this element depend on
+    :param after list/string: On what pipeline elements does this element depend on. Using constant ALL
+                              makes the pipeline element the last one in the chain
     :param mapper string/function: (only for is_parallel)
     :param reducer string/function: (only for is_parallel)
     :param requires_parameter list: Names of parameters that will be passed as keyword arguments
