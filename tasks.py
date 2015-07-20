@@ -58,18 +58,29 @@ def dict_reducer(self, items, extra=None):
 
 # TODO - this is a bit hinky, but solves the kickoff problem
 @app.task(bind=True)
-def concat(self, acc, arg=None, ):
+def concat(self, acc, arg=None, *args):
     """Just return the arg appended to the accumulator.
 
     One positional should be the arg.
     Two positional arguments should be accumulator, arg
 
     :param arg: object to append to a list
-    :param acc: optional list to append to, if missing new list will be created"""
+    :param acc: optional list to append to, if missing new list will be created
+        if not a list, it will be wrapped with a list.
+    """
+    print 'concat call({}, {}, {})'.format(acc, arg, args)
     if arg is None:
         arg = acc
         acc = []
-    print 'concat({}, {})'.format(acc, arg)
+
+    print 'concat fixed({}, {}, {})'.format(acc, arg, args)
+
+    if not isinstance(acc, list):
+        # Support upgrading a single item to a list
+        acc = [acc]
+
+    print 'concat action({}, {})'.format(acc, arg)
+
     return acc + [arg]
 
 
@@ -96,7 +107,12 @@ def lazy_async_apply_map(self, items, d, runner):
         r.args = (item, d) + r.args
         subtasks.append(r)
 
-    raise self.replace(group(*subtasks))
+    try:
+        # Celery master
+        raise self.replace(group(*subtasks))
+    except AttributeError:
+        # Celery 3.1
+        raise self.replace_in_chord(group(*subtasks))
 
 
 @app.task(bind=True)

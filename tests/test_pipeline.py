@@ -2,6 +2,7 @@ import mock
 import networkx as nx
 from pytest import raises
 from collections import defaultdict
+from celery import chord
 
 import celery_capillary
 from celery_capillary import make_pipeline_from_defaults, PipelineConfigurator
@@ -211,8 +212,8 @@ def test_lazy_async_apply_map():
     }
     # assume a mapper task generated these items
     items = [{1: 'test'}, {2: 'test'}, {3: 'test'}]
-    t = lazy_async_apply_map.s(items, d, runner=generator.s()) | concat.s() | dict_reducer.s()
-    res = t.apply()
+    c = chord(lazy_async_apply_map.s(items, d, runner=generator.s()), concat.s()) | dict_reducer.s()
+    res = c.apply()
     # assert res.get() == {
     #     'test_key': 3,
     #     'list_me': [{1: 'test'}, {2: 'test'}, {3: 'test'}],
