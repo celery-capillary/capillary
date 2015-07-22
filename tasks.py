@@ -1,7 +1,10 @@
-from massimport.celery import app
 from collections import Mapping
+
 from celery import group
 from celery.exceptions import Ignore
+
+from massimport.celery import app
+from feeds.utils import merge_dicts
 
 
 @app.task(bind=True)
@@ -53,6 +56,24 @@ def dict_reducer(self, items):
             # Aught to be a list, recurse
             res.update(dict_reducer(i))
     return res
+
+
+@app.task(bind=True)
+def sdm_reducer(self, items):
+    """Combine list of SDM dictionaries into a single dict
+
+    :param items: Single dictionary (noop) or list of dictionaries
+
+    :returns dict: Single combined dictionary
+    """
+
+    # print 'sdm_reducer: {}'.format(items)
+
+    # if items is a mapping, just return it
+    if isinstance(items, Mapping):
+        return items
+
+    return reduce(merge_dicts, items)
 
 
 # TODO - this is a bit hinky
