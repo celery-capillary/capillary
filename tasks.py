@@ -1,6 +1,7 @@
 from massimport.celery import app
 from collections import Mapping
 from celery import group
+from celery.exceptions import Ignore
 
 
 @app.task(bind=True)
@@ -18,7 +19,7 @@ def list_to_set_reducer(self, groups):
     :rtype: list
     """
     # TODO does this assume too much knowledge of the shape of the input?
-    print 'list_to_set_reducer: {}'.format(groups)
+    # print 'list_to_set_reducer: {}'.format(groups)
     s = set()
     for g in groups:
         for i in g:
@@ -28,7 +29,7 @@ def list_to_set_reducer(self, groups):
 
 
 @app.task(bind=True)
-def dict_reducer(self, items, extra=None):
+def dict_reducer(self, items):
     """Combine a series of dictionaries into a single dict
 
     :param items: Recursive structure containing Lists of dictionaries or lists of the recursive structure
@@ -36,9 +37,7 @@ def dict_reducer(self, items, extra=None):
     :returns dict: Single combined dictionary
     """
 
-    print 'dict_reducer: {}'.format(items)
-    if extra:
-        print 'dict_reducer: got some extra: {}'.format(extra)
+    # print 'dict_reducer: {}'.format(items)
 
     # if items is a mapping, just return it
     if isinstance(items, Mapping):
@@ -56,7 +55,7 @@ def dict_reducer(self, items, extra=None):
     return res
 
 
-# TODO - this is a bit hinky, but solves the kickoff problem
+# TODO - this is a bit hinky
 @app.task(bind=True)
 def concat(self, acc, arg=None, *args):
     """Just return the arg appended to the accumulator.
@@ -68,18 +67,18 @@ def concat(self, acc, arg=None, *args):
     :param acc: optional list to append to, if missing new list will be created
         if not a list, it will be wrapped with a list.
     """
-    print 'concat call({}, {}, {})'.format(acc, arg, args)
+    # print 'concat call({}, {}, {})'.format(acc, arg, args)
     if arg is None:
         arg = acc
         acc = []
 
-    print 'concat fixed({}, {}, {})'.format(acc, arg, args)
+    # print 'concat fixed({}, {}, {})'.format(acc, arg, args)
 
     if not isinstance(acc, list):
         # Support upgrading a single item to a list
         acc = [acc]
 
-    print 'concat action({}, {})'.format(acc, arg)
+    # print 'concat action({}, {})'.format(acc, arg)
 
     return acc + [arg]
 
@@ -87,14 +86,17 @@ def concat(self, acc, arg=None, *args):
 @app.task(bind=True)
 def generator(self, arg, *args, **kwargs):
     """Just return the first arg as the results. Ignores any other params"""
-    print 'generator: {}'.format(arg)
+    # print 'generator: {}'.format(arg)
     return arg
 
 
 @app.task(bind=True)
 def lazy_async_apply_map(self, items, d, runner):
-    """use mapper to extract items from d, process them with runner, then
-    reduce the results with reducer
+    """Make new instances of runner for each item in items, and inject that
+    group into the chord that executed this task.
+
+    NB This task does not work with eager results
+    NB This task does not work with celery==3.1, only on master
 
     :param items: itterable of arguments for the runner
     :param d: data to operate on (probably returned by a previous task)
@@ -106,13 +108,42 @@ def lazy_async_apply_map(self, items, d, runner):
         r = runner.clone()
         r.args = (item, d) + r.args
         subtasks.append(r)
+    g = group(*subtasks)
+
+    if self.request.is_eager:
+        # Maybe this works - sometimes, if the argument count is right
+        return g.apply().get()
 
     try:
-        # Celery master
-        raise self.replace(group(*subtasks))
+        # Celery master (>= 3.2)
+        raise self.replace(g)
     except AttributeError:
-        # Celery 3.1
-        raise self.replace_in_chord(group(*subtasks))
+        pass
+
+    # Try to do it ourselves for celery == 3.1
+    # FIXME - not quite working
+
+    # TODO - a bit hacky, reducer should be parameterized
+    g = group(*subtasks) | generator.s().set(
+        # task_id=self.request.id,
+        chord=self.request.chord,
+    )
+    # | dict_reducer.s().set(
+    #     task_id=self.request.id,
+    #     chord=self.request.chord,
+    #     reply_to=self.request.reply_to,
+    # )
+
+    # Replace running task with the group
+    # inspired by task.replace from Celery master (3.2)
+    g.freeze(
+        self.request.id,
+        group_id=self.request.group,
+        # chord=self.request.chord,
+        # reply_to=self.request.reply_to,
+    )
+    g.delay()
+    raise Ignore('Chord member replaced by new task')
 
 
 @app.task(bind=True)

@@ -203,22 +203,3 @@ def test_condense_tree():
 
     # For further inspection
     return res
-
-
-def test_lazy_async_apply_map():
-    d = {
-        'test_key': 3,
-        'list_me': [{1: 'test'}, {2: 'test'}, {3: 'test'}]
-    }
-    # assume a mapper task generated these items
-    items = [{1: 'test'}, {2: 'test'}, {3: 'test'}]
-    c = chord(lazy_async_apply_map.s(items, d, runner=generator.s()), concat.s()) | dict_reducer.s()
-    res = c.apply()
-    # assert res.get() == {
-    #     'test_key': 3,
-    #     'list_me': [{1: 'test'}, {2: 'test'}, {3: 'test'}],
-    #     1: 'test',
-    #     2: 'test',
-    #     3: 'test',
-    # }
-    return res

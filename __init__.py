@@ -384,10 +384,11 @@ class PipelineConfigurator(object):
             except KeyError:
                 raise DependencyError('Missing reducer "{}"'.format(reducer_name))
 
+            # lazy_async_apply_map must always be called in a chord for now, see:
+            # https://github.com/celery/celery/issues/2722
             task = (
                 mapper.s(*args, **new_kwargs) |
-                lazy_async_apply_map.s(task) |
-                reducer.s(*args, **new_kwargs)
+                chord(lazy_async_apply_map.s(task), reducer.s(*args, **new_kwargs))
             )
         return task
 
@@ -410,55 +411,17 @@ class PipelineConfigurator(object):
         """Working from the bottom up, replace each node with a chain to its
         descendant, or celery.Group of descendants.
 
-        :param tree: (preserves) Dependancy graph of tasks
+        :param tree: Dependancy graph of tasks
         :type tree: networkx.DiGraph
 
-        :returns: None
+        :returns: chain to execute
         """
 
-        # Don't change the input tree
-        tree = tree.copy()
-
-        # traverse the tree from the depth upwards
-        # This ensures we'll hit the most deaply nested groups first
-        # explicit list so we can remove nodes while itterating
-        for name in list(nx.dfs_postorder_nodes(tree)):
-            data = tree.node[name]
-            # Copy converts signatures to dicts, change them back
-            data['task'] = maybe_signature(data['task'], self.celery_app)
-
-            # If no children
-            if len(tree[name]) == 0:
-                # Skip further processing
-                continue
-
-            # Since the node has Children
-            # Those children need to be wrapped into a group
-            # Chould be a group of 1 item, that's OK, evens out the interface for later tasks
-
-            # TODO: Busted because celery :( -- Nesting groups stop tracking results at some point
-            # https://github.com/celery/celery/issues/2676
-            # https://github.com/celery/celery/issues/2354
-            # might be fixed:
-            # https://github.com/celery/celery/commit/1e3fcaa969de6ad32b52a3ed8e74281e5e5360e6
-            data['task'] |= group(*[tree.node[n]['task'] for n in tree.successors(name)])
-
-            # Chain instead of group works, of course, but isn't parallel. Assumes that tasks between
-            # a task and it's actuall dependancy don't screw up the input
-            # data['task'] |= chain(*[tree.node[n]['task'] for n in tree.successors(name)])
-
-            # Then remove all children from the tree
-            tree.remove_nodes_from(tree[name].keys())
-
-        # tree is now a set of independent chains.
-        assert len(tree.edges()) == 0
-
-        # Don't return a wrapping group when you don't have to
-        tasks = [d['task'] for n, d in tree.nodes(data=True)]
-        if len(tasks) == 1:
-            return tasks[0]
-        else:
-            return group(*tasks)
+        # TODO: This could be more parallel
+        return chain(*[
+            maybe_signature(tree.node[name]['task'], self.celery_app)
+            for name in nx.topological_sort(tree)
+        ])
 
 
 def prune_edges(tree):
