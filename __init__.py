@@ -233,10 +233,8 @@ class PipelineConfigurator(object):
         :param args: Arguments passed as an input to the pipeline.
         :param kwargs: Keyword arguments passed as an input to the pipeline.
         :param tagged_as list: TODO
-        :returns: AsyncResult
 
-        .. warning:: Currently `run_pipeline` supports only one map/reduce
-                     implemented as a chord in Celery.
+        :returns: AsyncResult
         """
         tasks = self._get_pipeline(**options)
 
@@ -250,10 +248,10 @@ class PipelineConfigurator(object):
         task = self.get_task_to_run(tree)
 
         # Chain to the final task if needed
-        final = self.get_end_task(tasks)
+        final = self.get_end_task(tasks, args, kwargs)
         if final is not None:
             task |= final
-        return task.delay()
+        return task.delay({})  # FIXME: we happen to know that the init task needs a dict for the first arg
 
     def prettyprint_pipeline(self, **options):
         """Stylish pipeline printout
