@@ -314,7 +314,8 @@ class PipelineConfigurator(object):
                     raise DependencyError(msg.format(req, name, info))
                 tree.add_edge(req, name)
 
-        tree = prune_edges(tree)
+        # Not as useful as it originally seemed
+        # tree = prune_edges(tree)
 
         # Check for circular dependencies
         try:
@@ -413,11 +414,8 @@ def prune_edges(tree):
     # Then : Edge (a, c) is not required
     #  As it is coverd by the path (a, b, c)
     for name, data in tree.nodes(data=True):
-        print 'Checking {} - {}'.format(name, data['info']['after'])
         for prereq in data['info']['after']:
             paths = list(nx.all_simple_paths(tree, prereq, name))
             if len(paths) > 1:
-                print '\tGiven paths: {}'.format(paths)
-                print '\tRemove edge {}, {}'.format(prereq, name)
                 tree.remove_edge(prereq, name)
     return tree
