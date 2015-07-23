@@ -7,6 +7,7 @@ from structlog import get_logger
 
 # from .tasks import serial_runner
 from celery import chain, chord, group, maybe_signature
+from celery.exceptions import Ignore
 import networkx as nx
 
 from celery_capillary.utils import Sentinel
@@ -22,7 +23,7 @@ class DependencyError(Exception):
     """Raised when there are problems in the shape of the pipeline"""
 
 
-class AbortPipeline(Exception):
+class AbortPipeline(Ignore):
     """Raised if the pipeline should be aborted all together."""
 
 
