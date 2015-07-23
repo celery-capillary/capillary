@@ -1,48 +1,3 @@
-"""Example usage
-
-Configure the pipeline
-
->>> from celery_capillary import PipelineConfigurator
->>> pc = PipelineConfigurator()
->>> pc.add_error_handling_strategy('exponential', lambda task: None)
->>> pc.add_mapper('related_objects', lambda f, x, s: s['related_objects'])
->>> pc.add_reducer('merge', lambda xsdm: None)
-
-Create pipelines based on different defaults
-
->>> from celery_capillary import make_pipeline_from_defaults
->>> ap_pipeline = make_pipeline_from_defaults(
->>>     tags=["AP"]
->>> )
-
-
-Parallel pipeline
-
->>> @ap_pipeline(
->>>     error_handling_strategy="backoff",
->>>     after="related_objects",
->>>     mapper="related_objects",
->>>     is_parallel=True,
->>>     reducer="merge",
->>> )
->>> def upload_image(self, feedparser_feed_item, xml_feed_item, sdm):
->>>     guid = sdm['guid']
->>>     response = requests.get(guid)
->>>     return {'related_item': {'metadata': response}}
-
-Basic usage
-
->>> @ap_pipeline(
->>>     after=["body_content"],
->>> )
->>> def summary(self, feedparser_feed_item, xml_feed_item, sdm):
->>>     return {'summary': sdm['body_content'][:30]}
-
-Execute the pipeline
->>> pc.run_pipeline(feedparser_feed_item, xml_feed_item, {}, tagged_as=['AP'])
-
-"""
-
 import re
 from functools import partial
 from collections import defaultdict
@@ -54,11 +9,13 @@ from structlog import get_logger
 from celery import chain, chord, group, maybe_signature
 import networkx as nx
 
+from celery_capillary.utils import Sentinel
+
 logger = get_logger()
-_sentiel = object()
+_sentinel = object()
 
 #: constant to note a pipeline element that is ran the last by specifying after=ALL
-ALL = object()
+ALL = Sentinel('ALL')
 
 
 class DependencyError(Exception):
@@ -71,27 +28,39 @@ class AbortPipeline(Exception):
 
 def pipeline(**kwargs):
     """
-    Decorator for configuring pipeline flow declaratively. Applying @pipeline to a function
-    makes it a celery function too (once PipelineConfigurator is initialized).
+    Decorator for configuring pipeline flow declaratively.
+
+    Applying :func:`pipeline` decorator to a function has very little side effects
+    once decorator is evaluated. :func:`pipeline decorator attaches :attr:`callback`
+    attribute to the function that only later when :class:`PipelineConfigurator`
+    is initialized preforms following actions:
+
+    * wraps the decorator function to become a celery task (with `bind=True` passed
+    by default, see http://celery.readthedocs.org/en/latest/userguide/tasks.html#task-request-info)
+    * registers pipeline element and populates :attr:`PipelineConfigurator.registry`
 
     :param name string: Unique identifier of the pipeline element (defaults to the decorated function name)
-    :param tags list:
+    :param tags list: A list of tags this pipeline element belongs to. See
+                      :meth:`PipelineConfigurator.run_pipeline` to understand how
+                      tags affect what pipeline elements belong together)
     :param error_handling_strategy string: (only for is_parallel)
-    :param is_parallel boolean: Should the pipeline element be ran in separate Celery task in parallel
-    :param after list/string: On what pipeline elements does this element depend on. Using constant ALL
+    :param is_parallel boolean: Should the pipeline element be ran as a separate Celery task in parallel?
+    :param after list/string: On what pipeline output does this element depend on. Using constant ALL
                               makes the pipeline element the last one in the chain
-    :param mapper string/function: (only for is_parallel)
-    :param reducer string/function: (only for is_parallel)
-    :param requires_parameter list: Names of parameters that will be passed as keyword arguments
-                                    to this element
-    :param celery_task_kwargs dict: Keyword arguments passed to the celery task.
+    :param mapper string/function: (only for is_parallel) TODO
+    :param reducer string/function: (only for is_parallel) TODO
+    :param requires_parameter list/string: Names of parameters that will be passed as keyword arguments
+                                           to this pipeline element
+    :param celery_task_kwargs dict: Keyword arguments passed to the celery task. For a list of options
+                                    see http://celery.readthedocs.org/en/latest/userguide/tasks.html#list-of-options
+    :raises: :exc:`ValueError` if unknown keyword argument is recieved
 
     Example::
 
     >>> @pipeline(
-    >>>     after="somepipeline",
+    >>>     after="some_other_pipeline_element",
     >>> )
-    >>> def foobar(self, *args):
+    >>> def foobar(celery_task, *args):
     >>>     raise NotImplemented
 
     """
@@ -108,16 +77,23 @@ def pipeline(**kwargs):
 
     if isinstance(after, basestring):
         after = [after]
+    if isinstance(requires_parameter, basestring):
+        requires_parameter = [requires_parameter]
 
     if kwargs:
         raise ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
 
     def decorator(wrapped):
         def callback(scanner, name, func):
-            # make the function also a celery function
-            func = scanner.celery_app.task(bind=True, **celery_task_kwargs)(func)
-
             name = new_name or name
+
+            # make the function also a celery task
+            func = scanner.celery_app.task(
+                name=func.__module__ + '.' + name,
+                bind=True,
+                **celery_task_kwargs
+            )(func)
+
             info = {
                 'func': func,
                 'name': name,
@@ -141,7 +117,7 @@ def pipeline(**kwargs):
                         raise ValueError('"{}" pipeline already exists for tag "{}"'.format(name, tag))
                     tagged[name] = info
             else:
-                untagged = scanner.registry[_sentiel]
+                untagged = scanner.registry[_sentinel]
                 if name in untagged:
                     raise ValueError('{} pipeline already exists without tags'.format(name))
                 untagged[name] = info
@@ -154,17 +130,18 @@ def pipeline(**kwargs):
 
 def make_pipeline_from_defaults(**kw):
     """
-    Changes default parameters to :meth:`ConfigurePipeline.pipeline` and
-    returns a new decorator.
+    Prepopulates default keyword parameters to :func:`pipeline` and
+    returns a new decorator. Intended to eliminate commonly repeated
+    arguments passed to multiple pipeline elements.
 
     Example::
 
-    >>> ap_pipeline = make_pipeline_from_defaults(
-    >>>     tags=["AP"]
+    >>> foobar_pipeline = make_pipeline_from_defaults(
+    >>>     tags=["foobar"]
     >>> )
 
-    >>> @ap_pipeline(
-    >>>     after="somepipeline",
+    >>> @foobar_pipeline(
+    >>>     after="some_other_pipeline_element",
     >>> )
     >>> def foobar(self, *args):
     >>>     raise NotImplemented
@@ -174,12 +151,15 @@ def make_pipeline_from_defaults(**kw):
 
 
 class PipelineConfigurator(object):
-    """Interface for configuring a pipeline using Celery tasks.
+    """Interface for configuring and running the pipeline imperatively.
+
+    TODO: mention what __init__ performs
 
     Supports mixing sync and async task within a pipeline.
 
-    :param celery_app: Celery app being used as the base
-    :param package: Where to scan for :func:`pipeline` decorators
+    :param celery_app: Celery app being used as the base.
+    :param package: A module to scan for :func:`pipeline` decorators using
+                    :meth:`venusian.Scanner.scan`.
 
     """
 
@@ -228,10 +208,12 @@ class PipelineConfigurator(object):
         - Parallel pipeline (executed in separate tasks)
         - Finalize pipeline (executed in the final task)
 
-        # TODO: how is the output handled
+        # TODO: how is the input/output handled
+        # TODO: explain how tags work
+        # TODO: explain how the task tree is generated
 
-        :param args: Arguments passed as an input to the pipeline.
-        :param kwargs: Keyword arguments passed as an input to the pipeline.
+        :param args list: Arguments passed as an input to the pipeline.
+        :param kwargs dict: Keyword arguments passed as an input to the pipeline.
         :param tagged_as list: TODO
 
         :returns: AsyncResult
@@ -258,15 +240,16 @@ class PipelineConfigurator(object):
         """
         from pprint import pprint
         tasks = self._get_pipeline(**options)
-        tree = self.build_tree(tasks)
-        pprint(tree.nodes(data=True))
+        tree = self.build_tree(tasks, args=args, kwargs=kwargs)
+        pprint(tree)
+        # TODO: draw the graph?
 
     def _get_pipeline(self, **options):
         tagged_as = options.pop('tagged_as', [])
 
         # get tasks for default tag
         # Explicit dict for copy? amcm
-        tasks = dict(self.registry[_sentiel])
+        tasks = dict(self.registry[_sentinel])
 
         # override tasks by adding tasks in correct order
         for tag in tagged_as:
@@ -305,7 +288,7 @@ class PipelineConfigurator(object):
         :returns: Graph containing each node connected by dependencies, "after: ALL" nodes will be ignored
         :rtype: networkx.DiGraph
 
-        :raises DependencyError
+        :raises: DependencyError
         """
 
         # Find dependencies - directed graph of node names
@@ -326,7 +309,7 @@ class PipelineConfigurator(object):
                 continue
             for req in info['after']:
                 if req not in tree:
-                    msg = '"{}" was not found in this set of tasks. name="{}" info="{}"'
+                    msg = 'after="{}" pipeline was not found: missing dependency from pipeline "{}" with configuration "{}"'
                     raise DependencyError(msg.format(req, name, info))
                 tree.add_edge(req, name)
 

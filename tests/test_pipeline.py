@@ -6,7 +6,7 @@ from celery import chord
 
 import celery_capillary
 from celery_capillary import make_pipeline_from_defaults, PipelineConfigurator
-from celery_capillary import pipeline, _sentiel
+from celery_capillary import pipeline, _sentinel
 from celery_capillary.tasks import concat, dict_reducer, generator, lazy_async_apply_map
 
 
@@ -66,6 +66,44 @@ def test_add_reducer_twice():
         pc.add_reducer('foobar', callback)
 
 
+def test_after_can_be_a_string():
+    @pipeline(after='foo')
+    def bar():
+        pass  # pragma: no cover
+
+    dummyscanner = DummyScanner()
+    bar.callback(dummyscanner, 'bar', bar)
+    assert {
+        'after': ['foo'],
+        'error_handling_strategy': None,
+        'func': bar,
+        'is_parallel': False,
+        'mapper': None,
+        'name': 'bar',
+        'reducer': None,
+        'requires_parameter': [],
+    } == dummyscanner.registry[_sentinel]['bar']
+
+
+def test_requires_parameter_can_be_a_string():
+    @pipeline(requires_parameter='foo')
+    def bar():
+        pass  # pragma: no cover
+
+    dummyscanner = DummyScanner()
+    bar.callback(dummyscanner, 'bar', bar)
+    assert {
+        'after': [],
+        'error_handling_strategy': None,
+        'func': bar,
+        'is_parallel': False,
+        'mapper': None,
+        'name': 'bar',
+        'reducer': None,
+        'requires_parameter': ['foo'],
+    } == dummyscanner.registry[_sentinel]['bar']
+
+
 def test_callback():
     @pipeline()
     def bar():
@@ -84,7 +122,7 @@ def test_callback():
         'name': 'bar',
         'reducer': None,
         'requires_parameter': [],
-    } == dummyscanner.registry[_sentiel]['bar']
+    } == dummyscanner.registry[_sentinel]['bar']
 
 
 def test_callback_name():
@@ -105,7 +143,7 @@ def test_callback_name():
         'name': 'foo',
         'reducer': None,
         'requires_parameter': [],
-    } == dummyscanner.registry[_sentiel]['foo']
+    } == dummyscanner.registry[_sentinel]['foo']
 
 
 def test_callback_twice():
@@ -139,7 +177,7 @@ def test_callback_tags():
         'requires_parameter': [],
     }
     # no default pipeline is registered
-    assert dummyscanner.registry[_sentiel] == {}
+    assert dummyscanner.registry[_sentinel] == {}
     # but pipeline is registered for each of the tags
     assert dummyscanner.registry['A']['bar'] == registered_pipeline
     assert dummyscanner.registry['B']['bar'] == registered_pipeline
