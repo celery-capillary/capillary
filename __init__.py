@@ -10,13 +10,15 @@ from celery import chain, chord, group, maybe_signature
 from celery.exceptions import Ignore
 import networkx as nx
 
-from celery_capillary.utils import Sentinel
-
 logger = get_logger()
-_sentinel = object()
 
-#: constant to note a pipeline element that is ran the last by specifying after=ALL
-ALL = Sentinel('ALL')
+
+class _sentinel(object):
+    """Sentinel to identify non-tagged tasks"""
+
+
+class ALL(object):
+    """Constant to note a pipeline element that is ran the last by specifying after=ALL"""
 
 
 class DependencyError(Exception):
