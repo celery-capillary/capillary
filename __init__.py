@@ -25,7 +25,7 @@ class DependencyError(Exception):
     """Raised when there are problems in the shape of the pipeline"""
 
 
-class AbortPipeline(Ignore):
+class AbortPipeline(Exception):
     """Raised if the pipeline should be aborted all together."""
 
 
