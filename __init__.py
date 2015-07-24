@@ -221,9 +221,12 @@ class PipelineConfigurator(object):
 
         :returns: AsyncResult
         """
+        no_arg = object()
+        initial_arg = options.pop('initial_arg', no_arg)
         tasks = self._get_pipeline(args, kwargs, **options)
-        # FIXME: we happen to know that the init task needs a dict for the first arg
-        return tasks.delay({})
+        if initial_arg is no_arg:
+            return tasks.delay()
+        return tasks.delay(initial_arg)
 
     def prettyprint_pipeline(self, args, kwargs, **options):
         """Stylish pipeline printout
