@@ -219,33 +219,18 @@ class PipelineConfigurator(object):
 
         :returns: AsyncResult
         """
-        tasks = self._get_pipeline(**options)
+        tasks = self._get_pipeline(args, kwargs, **options)
+        # FIXME: we happen to know that the init task needs a dict for the first arg
+        return tasks.delay({})
 
-        # now that we have the tasks, figure out the order of tasks
-        tree = self.build_tree(tasks)
-
-        # Make the signatures, so we can call the tasks
-        self.add_signatures_to_graph(tree, args=args, kwargs=kwargs)
-
-        # Reduce the tree by dependencies to task chain(s)
-        task = self.get_task_to_run(tree)
-
-        # Chain to the final task if needed
-        final = self.get_end_task(tasks, args, kwargs)
-        if final is not None:
-            task |= final
-        return task.delay({})  # FIXME: we happen to know that the init task needs a dict for the first arg
-
-    def prettyprint_pipeline(self, **options):
+    def prettyprint_pipeline(self, args, kwargs, **options):
         """Stylish pipeline printout
         """
-        from pprint import pprint
-        tasks = self._get_pipeline(**options)
-        tree = self.build_tree(tasks, args=args, kwargs=kwargs)
-        pprint(tree)
+        tasks = self._get_pipeline(args, kwargs, **options)
+        print tasks
         # TODO: draw the graph?
 
-    def _get_pipeline(self, **options):
+    def _get_pipeline(self, args, kwargs, **options):
         tagged_as = options.pop('tagged_as', [])
 
         # get tasks for default tag
@@ -258,7 +243,20 @@ class PipelineConfigurator(object):
                 raise ValueError('No pipelines for a tag {}'.format(tag))
             tasks.update(self.registry[tag])
 
-        return tasks
+        # now that we have the tasks, figure out the order of tasks
+        tree = self.build_tree(tasks)
+
+        # Make the signatures, so we can call the tasks
+        self.add_signatures_to_graph(tree, args=args, kwargs=kwargs)
+
+        # Reduce the tree by dependencies to task chain(s)
+        celery_tasks = self.get_task_to_run(tree)
+
+        # Chain to the final task if needed
+        final = self.get_end_task(tasks, args, kwargs)
+        if final is not None:
+            celery_tasks |= final
+        return celery_tasks
 
     def get_end_task(self, tasks, args, kwargs):
         """Accepts any number of tasks as returned by _get_pipeline.
