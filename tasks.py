@@ -3,6 +3,7 @@ from collections import Mapping
 from celery import group
 from celery.exceptions import Ignore
 
+# FIXME - How to really get the default app? Capillary shouldn't depend on massimport
 from massimport.celery import app
 from feeds.utils import merge_dicts
 
