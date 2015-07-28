@@ -47,8 +47,8 @@ def pipeline(**kwargs):
                       tags affect what pipeline elements belong together)
     :param error_handling_strategy string: (only for is_parallel)
     :param is_parallel boolean: Should the pipeline element be ran as a separate Celery task in parallel?
-    :param after list/string: On what pipeline output does this element depend on. Using constant ALL
-                              makes the pipeline element the last one in the chain
+    :param after list/string: Use the name of the pipeline element that's required to be ran before this one, or use the
+                              constant ALL to make the pipeline element the last one in the chain.'
     :param mapper string/function: (only for is_parallel) TODO
     :param reducer string/function: (only for is_parallel) TODO
     :param requires_parameter list/string: Names of parameters that will be passed as keyword arguments
