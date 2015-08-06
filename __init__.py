@@ -125,7 +125,11 @@ def pipeline(**kwargs):
                 untagged[name] = info
 
         venusian.attach(wrapped, callback, 'pipeline')
-        wrapped.callback = callback  # for testing purposes
+        # attack callback for testing purposes
+        if getattr(wrapped, 'callbacks', None):
+            wrapped.callbacks.append(callback)
+        else:
+            wrapped.callbacks = [callback]
         return wrapped
     return decorator
 

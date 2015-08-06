@@ -72,7 +72,7 @@ def test_after_can_be_a_string():
         pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
-    bar.callback(dummyscanner, 'bar', bar)
+    bar.callbacks[0](dummyscanner, 'bar', bar)
     assert {
         'after': ['foo'],
         'error_handling_strategy': None,
@@ -91,7 +91,7 @@ def test_requires_parameter_can_be_a_string():
         pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
-    bar.callback(dummyscanner, 'bar', bar)
+    bar.callbacks[0](dummyscanner, 'bar', bar)
     assert {
         'after': [],
         'error_handling_strategy': None,
@@ -110,7 +110,7 @@ def test_callback():
         pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
-    bar.callback(dummyscanner, 'bar', bar)
+    bar.callbacks[0](dummyscanner, 'bar', bar)
     # then the pipeline should be registered under default tag and
     # under name bar
     assert {
@@ -131,7 +131,7 @@ def test_callback_name():
         pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
-    bar.callback(dummyscanner, 'bar', bar)
+    bar.callbacks[0](dummyscanner, 'bar', bar)
     # then the pipeline should be registered under default tag and
     # under name foo, not bar
     assert {
@@ -152,9 +152,9 @@ def test_callback_twice():
         pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
-    bar.callback(dummyscanner, 'bar', bar)
+    bar.callbacks[0](dummyscanner, 'bar', bar)
     with raises(ValueError):
-        bar.callback(dummyscanner, 'bar', bar)
+        bar.callbacks[0](dummyscanner, 'bar', bar)
 
 
 def test_callback_tags():
@@ -163,7 +163,7 @@ def test_callback_tags():
         pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
-    bar.callback(dummyscanner, 'bar', bar)
+    bar.callbacks[0](dummyscanner, 'bar', bar)
     # then the pipeline should be registered under default tag and
     # under name foo, not bar
     registered_pipeline = {
@@ -183,15 +183,29 @@ def test_callback_tags():
     assert dummyscanner.registry['B']['bar'] == registered_pipeline
 
 
+def test_two_decorators():
+    @pipeline(tags=['A'], name="foo")
+    @pipeline(tags=['B'], name="baz")
+    def bar():
+        pass  # pragma: no cover
+
+    dummyscanner = DummyScanner()
+    bar.callbacks[0](dummyscanner, 'bar', bar)
+    bar.callbacks[1](dummyscanner, 'bar', bar)
+
+    assert 'foo' in dummyscanner.registry['A']
+    assert 'baz' in dummyscanner.registry['B']
+
+
 def test_callback_tag_twice():
     @pipeline(tags=['A'])
     def bar():
         pass  # pragma: no cover
 
     dummyscanner = DummyScanner()
-    bar.callback(dummyscanner, 'bar', bar)
+    bar.callbacks[0](dummyscanner, 'bar', bar)
     with raises(ValueError) as excinfo:
-        bar.callback(dummyscanner, 'bar', bar)
+        bar.callbacks[0](dummyscanner, 'bar', bar)
     assert str(excinfo.value) == '"bar" pipeline already exists for tag "A"'
 
 
