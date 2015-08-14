@@ -3,13 +3,10 @@ from functools import partial
 from collections import defaultdict
 
 import venusian
-from structlog import get_logger
 
 # from .tasks import serial_runner
 from celery import chain, chord, group, maybe_signature
 import networkx as nx
-
-logger = get_logger()
 
 
 class _sentinel(object):
@@ -106,12 +103,6 @@ def pipeline(**kwargs):
                 'reducer': reducer,
                 'requires_parameter': requires_parameter,
             }
-            logger.debug(
-                '@pipeline registered',
-                name=name,
-                info=info,
-                tags=tags,
-            )
             if tags:
                 for tag in tags:
                     tagged = scanner.registry[tag]
