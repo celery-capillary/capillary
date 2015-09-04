@@ -35,7 +35,7 @@ def pipeline(**kwargs):
     is initialized preforms following actions:
 
     * wraps the decorator function to become a celery task (with `bind=True` passed
-    by default, see http://celery.readthedocs.org/en/latest/userguide/tasks.html#task-request-info)
+      by default, see http://celery.readthedocs.org/en/latest/userguide/tasks.html#task-request-info)
     * registers pipeline element and populates :attr:`PipelineConfigurator.registry`
 
     :param name string: Unique identifier of the pipeline element (defaults to the decorated function name)
