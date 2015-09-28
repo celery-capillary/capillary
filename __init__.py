@@ -19,6 +19,11 @@ class ALL(object):
 class DependencyError(Exception):
     """Raised when there are problems in the shape of the pipeline"""
 
+class MissingArgument(Exception):
+    """Raised when :func:`@pipeline` has `requires_kwargs` specified,
+    but :meth:`PipelineConfigurator.run` didn't recive a value for it in
+    `required_kwargs`
+    """
 
 class AbortPipeline(Exception):
     """Raised if the pipeline should be aborted all together."""
@@ -351,6 +356,16 @@ class PipelineConfigurator(object):
         from .tasks import lazy_async_apply_map
 
         new_kwargs = {k: v for k, v in required_kwargs.items() if k in info.get('requires_kwargs', [])}
+
+        missing_kwargs = list(set(info.get('requires_kwargs', [])) - set(new_kwargs.keys()))
+        if missing_kwargs:
+            raise MissingArgument(
+                '{} requires {} keyword arguments specified'.format(
+                    info['func'],
+                    ', '.join(missing_kwargs),
+                ),
+            )
+
         task = info['func'].s(
             **new_kwargs
         )
