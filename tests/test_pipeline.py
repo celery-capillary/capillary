@@ -22,14 +22,14 @@ def test_make_pipeline_from_defaults():
 
 
 def test_add_error_handling_strategy():
-    pc = PipelineConfigurator(None, celery_capillary)
+    pc = PipelineConfigurator(None)
     callback = lambda x: x
     pc.add_error_handling_strategy('foobar', callback)
     assert 'foobar' in pc.error_handling_strateies
 
 
 def test_add_error_handling_strategy_twice():
-    pc = PipelineConfigurator(None, celery_capillary)
+    pc = PipelineConfigurator(None)
     callback = lambda x: x
     pc.add_error_handling_strategy('foobar', callback)
     with raises(ValueError):
@@ -37,14 +37,14 @@ def test_add_error_handling_strategy_twice():
 
 
 def test_add_mapper():
-    pc = PipelineConfigurator(None, celery_capillary)
+    pc = PipelineConfigurator(None)
     callback = lambda x: x
     pc.add_mapper('foobar', callback)
     assert 'foobar' in pc.mappers
 
 
 def test_add_mapper_twice():
-    pc = PipelineConfigurator(None, celery_capillary)
+    pc = PipelineConfigurator(None)
     callback = lambda x: x
     pc.add_mapper('foobar', callback)
     with raises(ValueError):
@@ -52,14 +52,14 @@ def test_add_mapper_twice():
 
 
 def test_add_reducer():
-    pc = PipelineConfigurator(None, celery_capillary)
+    pc = PipelineConfigurator(None)
     callback = lambda x: x
     pc.add_reducer('foobar', callback)
     assert 'foobar' in pc.reducers
 
 
 def test_add_reducer_twice():
-    pc = PipelineConfigurator(None, celery_capillary)
+    pc = PipelineConfigurator(None)
     callback = lambda x: x
     pc.add_reducer('foobar', callback)
     with raises(ValueError):

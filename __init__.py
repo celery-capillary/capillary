@@ -4,7 +4,6 @@ from collections import defaultdict
 
 import venusian
 
-# from .tasks import serial_runner
 from celery import chain, chord, group, maybe_signature
 import networkx as nx
 
@@ -30,27 +29,23 @@ def pipeline(**kwargs):
     Decorator for configuring pipeline flow declaratively.
 
     Applying :func:`pipeline` decorator to a function has very little side effects
-    once decorator is evaluated. :func:`pipeline decorator attaches :attr:`callback`
-    attribute to the function that only later when :class:`PipelineConfigurator`
+    once decorator is evaluated. :func:`pipeline` decorator registers a callback
+    function that only later when :class:`PipelineConfigurator`
     is initialized preforms following actions:
 
     * wraps the decorator function to become a celery task (with `bind=True` passed
       by default, see http://celery.readthedocs.org/en/latest/userguide/tasks.html#task-request-info)
     * registers pipeline element and populates :attr:`PipelineConfigurator.registry`
 
-    :param name string: Unique identifier of the pipeline element (defaults to the decorated function name)
-    :param tags list: A list of tags this pipeline element belongs to. See
-                      :meth:`PipelineConfigurator.run_pipeline` to understand how
+    :param string name: Unique identifier of the pipeline element (defaults to the decorated function name)
+    :param list tags: A list of tags this pipeline element belongs to. See
+                      :meth:`PipelineConfigurator.run` to understand how
                       tags affect what pipeline elements belong together)
-    :param error_handling_strategy string: (only for is_parallel)
-    :param is_parallel boolean: Should the pipeline element be ran as a separate Celery task in parallel?
-    :param after list/string: Use the name of the pipeline element that's required to be ran before this one, or use the
+    :param list|string after: Use the name of the pipeline element that's required to be ran before this one, or use the
                               constant ALL to make the pipeline element the last one in the chain.'
-    :param mapper string/function: (only for is_parallel) TODO
-    :param reducer string/function: (only for is_parallel) TODO
-    :param requires_parameter list/string: Names of parameters that will be passed as keyword arguments
+    :param list|string requires_parameter: Names of parameters that will be passed as keyword arguments
                                            to this pipeline element
-    :param celery_task_kwargs dict: Keyword arguments passed to the celery task. For a list of options
+    :param dict celery_task_kwargs: Keyword arguments passed to the celery task. For a list of options
                                     see http://celery.readthedocs.org/en/latest/userguide/tasks.html#list-of-options
     :raises: :exc:`ValueError` if unknown keyword argument is recieved
 
@@ -148,27 +143,32 @@ def make_pipeline_from_defaults(**kw):
 
 
 class PipelineConfigurator(object):
-    """Interface for configuring and running the pipeline imperatively.
+    """Object for configuring and running the pipeline.
 
-    TODO: mention what __init__ performs
-
-    Supports mixing sync and async task within a pipeline.
-
-    :param celery_app: Celery app being used as the base.
-    :param package: A module to scan for :func:`pipeline` decorators using
-                    :meth:`venusian.Scanner.scan`.
+    :param celery_app: :class:`celery.Celery` application instance being used to
+                       register tasks
 
     """
 
-    def __init__(self, celery_app, package):
+    def __init__(self, celery_app):
         self.celery_app = celery_app
         self.error_handling_strateies = {}
         self.mappers = {}
         self.reducers = {}
+        self.scanner = venusian.Scanner(registry=defaultdict(dict), celery_app=celery_app)
 
-        scanner = venusian.Scanner(registry=defaultdict(dict), celery_app=celery_app)
-        scanner.scan(package, categories=['pipeline'], ignore=[re.compile('tests$').search])
-        self.registry = scanner.registry
+    def scan(self, package):
+        """
+        Calls :meth:`venusian.Scanner.scan` with `pipeline` under categories
+        and ignoring any folders/files that match `tests$` regex.
+
+        It can be called multiple times if more than one package has to be scanned.
+
+        :param module package: A package/module to scan for :func:`@pipeline` using
+                        :meth:`venusian.Scanner.scan`.
+        """
+        self.scanner.scan(package, categories=['pipeline'], ignore=[re.compile('tests$').search])
+        self.registry = self.scanner.registry
 
     def add_error_handling_strategy(self, name, callback):
         """
@@ -192,7 +192,7 @@ class PipelineConfigurator(object):
             raise ValueError('{} reducer already registered'.format(name))
         self.reducers[name] = callback
 
-    def run_pipeline(self, args, kwargs, **options):
+    def run(self, args, kwargs, **options):
         """
         Executes the pipeline and returns the chain of tasks used.
 
@@ -204,24 +204,29 @@ class PipelineConfigurator(object):
         task as its first positional argument.
 
         By tagging pipeline elements in their decorators, you can choose which
-        elements should be run by run_pipeline.
+        elements should be ran by :meth:`run`.
 
-        :param args list: Arguments passed as an input to the pipeline.
-        :param kwargs dict: Keyword arguments passed as an input to the pipeline.
-        :param tagged_as list: list of strings - which pipeline elements to apply.
-        :param inital_arg list: The input argument to all root level tasks.
+        :param list args: Arguments passed as an input to the pipeline.
+        :param dict kwargs: Keyword arguments passed as an input to the pipeline.
+        :param list tagged_as: list of strings - which pipeline elements to apply.
+        :param list inital_arg: The input argument to all root level tasks.
 
-        :returns: AsyncResult
+        :returns: :class:`celery.AsyncResult`
+        :raises: :exc:`DependencyError`
         """
+        tasks = self._get_pipeline(args, kwargs, **options)
+
         no_arg = object()
         initial_arg = options.pop('initial_arg', no_arg)
-        tasks = self._get_pipeline(args, kwargs, **options)
         if initial_arg is no_arg:
-            return tasks.delay()
-        return tasks.delay(initial_arg)
+            return tasks.apply_async()
+        else:
+            return tasks.apply_async(args=[initial_arg])
 
-    def prettyprint_pipeline(self, args, kwargs, **options):
-        """Stylish pipeline printout
+    def prettyprint(self, args, kwargs, **options):
+        """Pretty print pipeline to output using celery notation.
+
+        Accepts the same arguments as :class:`PipelineConfigurator.run`
         """
         tasks = self._get_pipeline(args, kwargs, **options)
         print tasks
@@ -284,7 +289,7 @@ class PipelineConfigurator(object):
         :returns: Graph containing each node connected by dependencies, "after: ALL" nodes will be ignored
         :rtype: networkx.DiGraph
 
-        :raises: DependencyError
+        :raises: :exc:`DependencyError`
         """
 
         # Find dependencies - directed graph of node names

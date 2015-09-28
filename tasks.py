@@ -1,3 +1,5 @@
+"""Experimental module for Celery task helpers.
+"""
 from collections import Mapping
 
 from celery import group
