@@ -43,7 +43,7 @@ def pipeline(**kwargs):
                       tags affect what pipeline elements belong together)
     :param list|string after: Use the name of the pipeline element that's required to be ran before this one, or use the
                               constant ALL to make the pipeline element the last one in the chain.'
-    :param list|string requires_parameter: Names of parameters that will be passed as keyword arguments
+    :param list|string requires_kwargs: Names of parameters that will be passed as keyword arguments
                                            to this pipeline element
     :param dict celery_task_kwargs: Keyword arguments passed to the celery task. For a list of options
                                     see http://celery.readthedocs.org/en/latest/userguide/tasks.html#list-of-options
@@ -66,13 +66,13 @@ def pipeline(**kwargs):
     after = kwargs.pop('after', [])
     mapper = kwargs.pop('mapper', None)
     reducer = kwargs.pop('reducer', None)
-    requires_parameter = kwargs.pop('requires_parameter', [])
+    requires_kwargs = kwargs.pop('requires_kwargs', [])
     celery_task_kwargs = kwargs.pop('celery_task_kwargs', {})
 
     if isinstance(after, basestring):
         after = [after]
-    if isinstance(requires_parameter, basestring):
-        requires_parameter = [requires_parameter]
+    if isinstance(requires_kwargs, basestring):
+        requires_kwargs = [requires_kwargs]
 
     if kwargs:
         raise ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
@@ -96,7 +96,7 @@ def pipeline(**kwargs):
                 'after': after,
                 'mapper': mapper,
                 'reducer': reducer,
-                'requires_parameter': requires_parameter,
+                'requires_kwargs': requires_kwargs,
             }
             if tags:
                 for tag in tags:
@@ -192,7 +192,7 @@ class PipelineConfigurator(object):
             raise ValueError('{} reducer already registered'.format(name))
         self.reducers[name] = callback
 
-    def run(self, args, kwargs, **options):
+    def run(self, args=None, kwargs=None, **options):
         """
         Executes the pipeline and returns the chain of tasks used.
 
@@ -206,34 +206,33 @@ class PipelineConfigurator(object):
         By tagging pipeline elements in their decorators, you can choose which
         elements should be ran by :meth:`run`.
 
-        :param list args: Arguments passed as an input to the pipeline.
-        :param dict kwargs: Keyword arguments passed as an input to the pipeline.
-        :param list tagged_as: list of strings - which pipeline elements to apply.
-        :param list inital_arg: The input argument to all root level tasks.
+        :param list args: Arguments passed as an input to the kickoff (first) task
+                          in the pipeline
+        :param dict kwargs: Keyword arguments passed as an input to the kickoff
+                            (first) task in the pipeline
+        :param list tagged_as: Execute only tasks with no tags and those tagged as
+                               specified using `tags` parameters to :func:`@pipeline`
+        :param list required_kwargs: Keyword arguments that some of :func:`@pipeline`
+                                     elements might require.
 
         :returns: :class:`celery.AsyncResult`
         :raises: :exc:`DependencyError`
         """
-        tasks = self._get_pipeline(args, kwargs, **options)
+        tasks = self._get_pipeline(**options)
+        return tasks.apply_async(args=args, kwargs=kwargs)
 
-        no_arg = object()
-        initial_arg = options.pop('initial_arg', no_arg)
-        if initial_arg is no_arg:
-            return tasks.apply_async()
-        else:
-            return tasks.apply_async(args=[initial_arg])
-
-    def prettyprint(self, args, kwargs, **options):
+    def prettyprint(self, args=None, kwargs=None, **options):
         """Pretty print pipeline to output using celery notation.
 
         Accepts the same arguments as :class:`PipelineConfigurator.run`
         """
-        tasks = self._get_pipeline(args, kwargs, **options)
+        tasks = self._get_pipeline(**options)
         print tasks
         # TODO: draw the graph?
 
-    def _get_pipeline(self, args, kwargs, **options):
+    def _get_pipeline(self, **options):
         tagged_as = options.pop('tagged_as', [])
+        required_kwargs = options.pop('required_kwargs', {})
 
         # get tasks for default tag
         # Explicit dict for copy? amcm
@@ -249,29 +248,31 @@ class PipelineConfigurator(object):
         tree = self.build_tree(tasks)
 
         # Make the signatures, so we can call the tasks
-        self.add_signatures_to_graph(tree, args=args, kwargs=kwargs)
+        self.add_signatures_to_graph(
+            tree,
+            required_kwargs,
+        )
 
         # Reduce the tree by dependencies to task chain(s)
         celery_tasks = self.get_task_to_run(tree)
 
         # Chain to the final task if needed
-        final = self.get_end_task(tasks, args, kwargs)
+        final = self.get_end_task(tasks, required_kwargs)
         if final is not None:
             celery_tasks |= final
         return celery_tasks
 
-    def get_end_task(self, tasks, args, kwargs):
+    def get_end_task(self, tasks, required_kwargs):
         """Accepts any number of tasks as returned by _get_pipeline.
 
         :param tasks: dictionary of str:info where str is the name of the task, info is from the registry
-        :param args: list of args for each task
-        :param kwargs: dict of kwargs for each task
+        :param required_kwargs:  Keyword arguments that some tasks require
 
         :returns: celery.Signature, or celery.group, or None
         """
 
         sigs = [
-            self.make_signature(info, args, kwargs)
+            self.make_signature(info, required_kwargs)
             for name, info in tasks.items()
             if info['after'] is ALL
         ]
@@ -337,12 +338,11 @@ class PipelineConfigurator(object):
         # Descendants of forks, cannot join from outside.
         return tree
 
-    def make_signature(self, info, args, kwargs):
+    def make_signature(self, info, required_kwargs):
         """Calculates the required signature to execute a step in the pipeline.
 
         :param info dict: info dict generated by pipeline describing a task
-        :param args list: args to call the task with
-        :param kwargs dict: kwargs to call the task with
+        :param required_kwargs dict:
 
         :returns: celery.Signature that will run the task as described.
                   Will be celery.chord for map/reduce tasks
@@ -350,9 +350,8 @@ class PipelineConfigurator(object):
         # Avoid circular import - used for map/reduce tasks
         from .tasks import lazy_async_apply_map
 
-        new_kwargs = {k: v for k, v in kwargs.items() if k in info.get('requires_parameter', [])}
+        new_kwargs = {k: v for k, v in required_kwargs.items() if k in info.get('requires_kwargs', [])}
         task = info['func'].s(
-            *args,
             **new_kwargs
         )
 
@@ -384,20 +383,19 @@ class PipelineConfigurator(object):
             )
         return task
 
-    def add_signatures_to_graph(self, tree, args, kwargs):
+    def add_signatures_to_graph(self, tree, required_kwargs):
         """Add the 'task' key to data on each node of the graph to launch tasks
         as specified by the 'info' and arg, kwargs.
 
         :param tree: networkx.DiGraph with task info (will be modified)
-        :param args: list of args for each task
-        :param kwargs: dict of kwargs for each task
+        :param required_kwargs:
 
         :returns: None
         """
 
         # Make the signatures
         for name, data in tree.nodes(data=True):
-            data['task'] = self.make_signature(data['info'], args, kwargs)
+            data['task'] = self.make_signature(data['info'], required_kwargs)
 
     def get_task_to_run(self, tree):
         """Working from the bottom up, replace each node with a chain to its
