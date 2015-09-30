@@ -20,7 +20,7 @@ class DependencyError(Exception):
     """Raised when there are problems in the shape of the pipeline"""
 
 class MissingArgument(Exception):
-    """Raised when :func:`@pipeline` has `requires_kwargs` specified,
+    """Raised when :func:`@pipeline` has `required_kwarg_names` specified,
     but :meth:`PipelineConfigurator.run` didn't recive a value for it in
     `required_kwargs`
     """
@@ -48,7 +48,7 @@ def pipeline(**kwargs):
                       tags affect what pipeline elements belong together)
     :param list|string after: Use the name of the pipeline element that's required to be ran before this one, or use the
                               constant ALL to make the pipeline element the last one in the chain.
-    :param list|string requires_kwargs: Names of parameters that will be passed as keyword arguments
+    :param list|string required_kwarg_names: Names of parameters that will be passed as keyword arguments
                                            to this pipeline element
     :param dict celery_task_kwargs: Keyword arguments passed to the celery task. For a list of options
                                     see http://celery.readthedocs.org/en/latest/userguide/tasks.html#list-of-options
@@ -71,13 +71,13 @@ def pipeline(**kwargs):
     after = kwargs.pop('after', [])
     mapper = kwargs.pop('mapper', None)
     reducer = kwargs.pop('reducer', None)
-    requires_kwargs = kwargs.pop('requires_kwargs', [])
+    required_kwarg_names = kwargs.pop('required_kwarg_names', [])
     celery_task_kwargs = kwargs.pop('celery_task_kwargs', {})
 
     if isinstance(after, basestring):
         after = [after]
-    if isinstance(requires_kwargs, basestring):
-        requires_kwargs = [requires_kwargs]
+    if isinstance(required_kwarg_names, basestring):
+        required_kwarg_names = [required_kwarg_names]
 
     if kwargs:
         raise ValueError('@pipeline got unknown keyword parameters: {}'.format(kwargs))
@@ -101,7 +101,7 @@ def pipeline(**kwargs):
                 'after': after,
                 'mapper': mapper,
                 'reducer': reducer,
-                'requires_kwargs': requires_kwargs,
+                'required_kwarg_names': required_kwarg_names,
             }
             if tags:
                 for tag in tags:
@@ -356,9 +356,9 @@ class PipelineConfigurator(object):
         # Avoid circular import - used for map/reduce tasks
         from .tasks import lazy_async_apply_map
 
-        new_kwargs = {k: v for k, v in required_kwargs.items() if k in info.get('requires_kwargs', [])}
+        new_kwargs = {k: v for k, v in required_kwargs.items() if k in info.get('required_kwarg_names', [])}
 
-        missing_kwargs = list(set(info.get('requires_kwargs', [])) - set(new_kwargs.keys()))
+        missing_kwargs = list(set(info.get('required_kwarg_names', [])) - set(new_kwargs.keys()))
         if missing_kwargs:
             raise MissingArgument(
                 '{} requires {} keyword arguments specified'.format(

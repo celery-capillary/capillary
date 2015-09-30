@@ -81,12 +81,12 @@ def test_after_can_be_a_string():
         'mapper': None,
         'name': 'bar',
         'reducer': None,
-        'requires_kwargs': [],
+        'required_kwarg_names': [],
     } == dummyscanner.registry[_sentinel]['bar']
 
 
-def test_requires_kwargs_can_be_a_string():
-    @pipeline(requires_kwargs='foo')
+def test_required_kwarg_names_can_be_a_string():
+    @pipeline(required_kwarg_names='foo')
     def bar():
         pass  # pragma: no cover
 
@@ -100,7 +100,7 @@ def test_requires_kwargs_can_be_a_string():
         'mapper': None,
         'name': 'bar',
         'reducer': None,
-        'requires_kwargs': ['foo'],
+        'required_kwarg_names': ['foo'],
     } == dummyscanner.registry[_sentinel]['bar']
 
 
@@ -121,7 +121,7 @@ def test_callback():
         'mapper': None,
         'name': 'bar',
         'reducer': None,
-        'requires_kwargs': [],
+        'required_kwarg_names': [],
     } == dummyscanner.registry[_sentinel]['bar']
 
 
@@ -142,7 +142,7 @@ def test_callback_name():
         'mapper': None,
         'name': 'foo',
         'reducer': None,
-        'requires_kwargs': [],
+        'required_kwarg_names': [],
     } == dummyscanner.registry[_sentinel]['foo']
 
 
@@ -174,7 +174,7 @@ def test_callback_tags():
         'mapper': None,
         'name': 'bar',
         'reducer': None,
-        'requires_kwargs': [],
+        'required_kwarg_names': [],
     }
     # no default pipeline is registered
     assert dummyscanner.registry[_sentinel] == {}
