@@ -9,24 +9,24 @@ import networkx as nx
 
 
 class _sentinel(object):
-    """Sentinel to identify non-tagged tasks"""
+    """Sentinel to identify non-tagged tasks."""
 
 
 class ALL(object):
-    """Constant to note a pipeline element that is ran the last by specifying after=ALL"""
+    """Constant to note a pipeline element that is run the last by specifying after=ALL."""
 
 
 class DependencyError(Exception):
-    """Raised when there are problems in the shape of the pipeline"""
+    """Raised when there are problems in the shape of the pipeline."""
 
 class MissingArgument(Exception):
     """Raised when :func:`@pipeline` has `required_kwarg_names` specified,
-    but :meth:`PipelineConfigurator.run` didn't recive a value for it in
-    `required_kwargs`
+    but :meth:`PipelineConfigurator.run` didn't receive a value for it in
+    `required_kwargs`.
     """
 
 class AbortPipeline(Exception):
-    """Raised if the pipeline should be aborted all together."""
+    """Raised if the pipeline should be aborted altogether."""
 
 
 def pipeline(**kwargs):
@@ -34,25 +34,27 @@ def pipeline(**kwargs):
     Decorator for configuring pipeline flow declaratively.
 
     Applying :func:`pipeline` decorator to a function has very little side effects
-    once decorator is evaluated. :func:`pipeline` decorator registers a callback
+    once the decorator is evaluated. :func:`pipeline` decorator registers a callback
     function that only later when :class:`PipelineConfigurator`
-    is initialized preforms following actions:
+    is initialized performs following actions:
 
     * wraps the decorator function to become a celery task (with `bind=True` passed
       by default, see http://celery.readthedocs.org/en/latest/userguide/tasks.html#task-request-info)
     * registers pipeline element and populates :attr:`PipelineConfigurator.registry`
 
-    :param string name: Unique identifier of the pipeline element (defaults to the decorated function name)
-    :param list tags: A list of tags this pipeline element belongs to. See
-                      :meth:`PipelineConfigurator.run` to understand how
-                      tags affect what pipeline elements belong together)
-    :param list|string after: Use the name of the pipeline element that's required to be ran before this one, or use the
-                              constant ALL to make the pipeline element the last one in the chain.
+    :param string name: Unique identifier of the pipeline element (defaults
+                        to the decorated function name)
+    :param list tags: A list of tags to which this pipeline element belongs.
+                      See :meth:`PipelineConfigurator.run` for information on
+                      how tags affect pipeline execution
+    :param list|string after: Use the name of the pipeline element that's required
+                              to run before this one or use the constant ALL
+                              to make the pipeline element the last one in the chain
     :param list|string required_kwarg_names: Names of parameters that will be passed as keyword arguments
                                            to this pipeline element
     :param dict celery_task_kwargs: Keyword arguments passed to the celery task. For a list of options
                                     see http://celery.readthedocs.org/en/latest/userguide/tasks.html#list-of-options
-    :raises: :exc:`ValueError` if unknown keyword argument is recieved
+    :raises: :exc:`ValueError` if unknown keyword argument is received
 
     Example::
 
@@ -205,11 +207,11 @@ class PipelineConfigurator(object):
         a DAG, and then partial ordering that ensures all prerequisites are met
         before launching tasks.
 
-        The return value of each task in the pipline is provided to the next
+        The return value of each task in the pipeline is provided to the next
         task as its first positional argument.
 
         By tagging pipeline elements in their decorators, you can choose which
-        elements should be ran by :meth:`run`.
+        elements should be run by :meth:`run`.
 
         :param list args: Arguments passed as an input to the kickoff (first) task
                           in the pipeline
