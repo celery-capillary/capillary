@@ -47,8 +47,8 @@ def pipeline(**kwargs):
     :param list tags: A list of tags to which this pipeline element belongs.
                       See :meth:`PipelineConfigurator.run` for information on
                       how tags affect pipeline execution
-    :param list|string after: Use the name of the pipeline element that's required
-                              to run before this one or use the constant ALL
+    :param list|string after: Use the name (or list of names) of the pipeline element
+                              that's required to run before this one or use the constant ALL
                               to make the pipeline element the last one in the chain
     :param list|string required_kwarg_names: Names of parameters that will be passed as keyword arguments
                                            to this pipeline element
