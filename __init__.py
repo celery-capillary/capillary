@@ -299,6 +299,7 @@ class PipelineConfigurator(object):
 
         :raises: :exc:`DependencyError`
         """
+        all_task_names = [task for tasks_subset in self.registry.values() for task in tasks_subset]
 
         # Find dependencies - directed graph of node names
         tree = nx.DiGraph()
@@ -317,10 +318,11 @@ class PipelineConfigurator(object):
                 # ignore these
                 continue
             for req in info['after']:
-                if req not in tree:
-                    msg = 'after="{}" pipeline was not found: missing dependency from pipeline "{}" with configuration "{}"'
+                if req not in all_task_names:
+                    msg = '"{}" pipeline element was not found, but it is declared as dependency of the pipeline "{}" with arguments "{}"'
                     raise DependencyError(msg.format(req, name, info))
-                tree.add_edge(req, name)
+                if req in tree:  # don't add an edge if dependency is not part of the current set of tasks
+                    tree.add_edge(req, name)
 
         # Not as useful as it originally seemed
         # tree = prune_edges(tree)
