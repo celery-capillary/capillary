@@ -1,31 +1,34 @@
 .. highlight:: python
 
-.. currentmodule:: celery_capillary
+.. currentmodule:: capillary
+
+Capillary
+=========
 
 :Status: Alpha (API feedback is welcome, API could break compatibility)
 :Generated: |today|
 :Version: |release|
-:License: CMG copyright
+:License: BSD 3 Clause
 :Authors: Domen Kožar and Aaron McMillin
 
 
 .. topic:: Introduction
 
-      :mod:`celery_capillary` is a small integration package for
+      :mod:`capillary` is a small integration package for
       the :mod:`celery` Distributed Task Queue with an aim of designing
       `workflows (Canvas) <http://celery.readthedocs.org/en/latest/userguide/canvas.html>`_
       in `a declarative manner <http://stackoverflow.com/questions/1784664/>`_
       using Python decorators.
 
-      The main reason why :mod:`celery_capillary` exists is to get rid of manual
+      The main reason why :mod:`capillary` exists is to get rid of manual
       tracking how celery tasks depend on each other.
 
-      :mod:`celery_capillary` executes in two phases:
+      :mod:`capillary` executes in two phases:
 
       1. Scans for all Celery tasks in defined Python packages
       2. Executes tasks based on metadata passed to :func:`@pipeline` decorators
 
-      :mod:`celery_capillary` uses:
+      :mod:`capillary` uses:
 
       - :mod:`venusian` to discover Celery tasks using deferred decorators
       - :mod:`networkx` to handle the graph operations for tracking
@@ -42,7 +45,7 @@ Simple Example
 --------------
 
 Below is the `first steps with Celery <http://celery.readthedocs.org/en/latest/getting-started/first-steps-with-celery.html#application>`_
-tutorial expanded with :mod:`celery_capillary` integration.
+tutorial expanded with :mod:`capillary` integration.
 
 The ``tasks.py`` module contains the steps of the pipeline.  Steps are
 marked with the ``@pipeline`` decorator, which has optional parameters
@@ -52,7 +55,7 @@ that the step has certain tags to allow groups of tasks to be executed together.
 .. code-block:: python
     :linenos:
 
-    from celery_capillary import pipeline
+    from capillary import pipeline
 
     @pipeline()
     def foo(celery_task):
@@ -69,7 +72,7 @@ instance which will assemble the declared steps:
     :linenos:
 
     from celery import Celery
-    from celery_capillary import PipelineConfigurator
+    from capillary import PipelineConfigurator
 
     import tasks
 
@@ -113,7 +116,7 @@ Celery uses a concept called `partials <http://celery.readthedocs.org/en/latest/
 (sometimes also known as `Currying <https://en.wikipedia.org/wiki/Currying>`_) to
 create function `signatures <http://celery.readthedocs.org/en/latest/userguide/canvas.html#signatures>`_.
 
-:mod:`celery_capillary`  reuses these concepts to execute tasks. A value returned
+:mod:`capillary`  reuses these concepts to execute tasks. A value returned
 from task ``foo`` is passed into task ``bar``.
 
 It is possible to pass extra parameters to specific tasks as described in
@@ -130,15 +133,14 @@ If ``tags=['foobar']`` is passed to :func:`@pipeline`, the task will be run
 when ```tagged_as=['foobar']`` is passed to :meth:`PipelineConfigurator.run`.
 
 See :ref:`predefined_defaults` for information on how to reduce boilerplate and
-group pipelines
-per tag.
+group pipelines per tag.
 
 
 Aborting the Pipeline
 ---------------------
 
 If a step needs to stop the current pipeline (meaning no further tasks
-are processed in the pipeline), just raise :exc:`celery_capillary.AbortPipeline`
+are processed in the pipeline), just raise :exc:`capillary.AbortPipeline`
 anywhere in your pipeline tasks.
 
 .. _extra-parameters:
@@ -208,7 +210,7 @@ decorator that will apply the same tag to each step:
 
 .. code-block:: python
 
-    >>> from celery_capillary import make_pipeline_from_defaults
+    >>> from capillary import make_pipeline_from_defaults
     >>> foobar_pipeline = make_pipeline_from_defaults(
     >>>     tags=["foobar"]
     >>> )
@@ -238,12 +240,12 @@ To actually see what kind of canvas will be executed call
 The very last task in the pipeline
 ----------------------------------
 
-Using a constant :class:`celery_capillary.ALL` it's possible to declare a task
+Using a constant :class:`capillary.ALL` it's possible to declare a task
 as the last one in the pipeline
 
 .. code-block:: python
 
-      >>> from celery_capillary import ALL, pipeline
+      >>> from capillary import ALL, pipeline
       >>> @pipeline(
       ...   after=ALL,
       ... )
@@ -316,9 +318,9 @@ Features to be considered
 API Reference
 =============
 
-.. automodule:: celery_capillary
+.. automodule:: capillary
     :members:
     :exclude-members: PipelineConfigurator
 
-.. autoclass:: celery_capillary.PipelineConfigurator
+.. autoclass:: capillary.PipelineConfigurator
     :members: run, prettyprint, scan
