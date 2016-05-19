@@ -52,8 +52,7 @@ marked with the ``@pipeline`` decorator, which has optional parameters
 to indicate that this step must be executed after some other step or
 that the step has certain tags to allow groups of tasks to be executed together.
 
-.. code-block:: python
-    :linenos:
+.. code:: python
 
     from capillary import pipeline
 
@@ -68,8 +67,7 @@ that the step has certain tags to allow groups of tasks to be executed together.
 The ``myapp.py`` module then creates a :class:`PipelineConfigurator`
 instance which will assemble the declared steps:
 
-.. code-block:: python
-    :linenos:
+.. code:: python
 
     from celery import Celery
     from capillary import PipelineConfigurator
@@ -82,14 +80,13 @@ instance which will assemble the declared steps:
 
 Start the worker with
 
-.. code-block:: bash
+.. code:: bash
 
     $ celery worker -A myapp -D
 
 and execute the pipeline in a Python shell:
 
-.. code-block:: python
-    :linenos:
+.. code:: python
 
     >>> from myapp import pc
     >>> asyncresult = pc.run()
@@ -151,7 +148,7 @@ Passing extra parameters to a specific task
 Some :func:`@pipeline` elements might require extra arguments that are only
 known when :meth:`PipelineConfigurator.run` is called.
 
-.. code-block:: python
+.. code:: python
 
     >>> @pipeline(
     ...     required_kwarg_names=['param'],
@@ -170,7 +167,7 @@ Applying multiple :func:`@pipeline` decorators
 The most typical use case where two :func:`@pipeline` decorators are useful is when
 you'd like to reuse a function for two different pipelines each differently tagged.
 
-.. code-block:: python
+.. code:: python
 
     @pipeline(
         after=['first', 'second'],
@@ -208,7 +205,7 @@ application. :func:`make_pipeline_from_defaults` allows you to create customized
 predefined defaults for a pipeline. This example makes a ``foobar_pipeline``
 decorator that will apply the same tag to each step:
 
-.. code-block:: python
+.. code:: python
 
     >>> from capillary import make_pipeline_from_defaults
     >>> foobar_pipeline = make_pipeline_from_defaults(
@@ -231,7 +228,7 @@ To actually see what kind of canvas will be executed call
 :meth:`ConfigurePipeline.prettyprint` with the same arguments as
 :meth:`ConfigurePipeline.run`
 
-.. code-block:: python
+.. code:: python
 
     >>> pc.prettyprint(args=[], kwargs={})
     tasks.foo() | tasks.bar()
@@ -243,7 +240,7 @@ The very last task in the pipeline
 Using a constant :class:`capillary.ALL` it's possible to declare a task
 as the last one in the pipeline
 
-.. code-block:: python
+.. code:: python
 
       >>> from capillary import ALL, pipeline
       >>> @pipeline(
@@ -286,7 +283,7 @@ depend on the first argument of ``celery_task``, just pass `None` as the value.
 
 To unit test our two pipeline elements from :ref:`simple-example`:
 
-.. code-block:: python
+.. code:: python
 
     class PipelineTestCase(unittest.TestCase):
 
@@ -302,7 +299,7 @@ Development
 
 To run tests install `py.test` and run it:
 
-.. code-block:: bash
+.. code:: bash
 
     $ py.test tests/
 
