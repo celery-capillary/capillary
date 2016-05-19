@@ -4,10 +4,10 @@ from pytest import raises
 from collections import defaultdict
 from celery import chord
 
-import celery_capillary
-from celery_capillary import make_pipeline_from_defaults, PipelineConfigurator
-from celery_capillary import pipeline, _sentinel
-from celery_capillary.tasks import concat, dict_reducer, generator, lazy_async_apply_map
+import capillary
+from capillary import make_pipeline_from_defaults, PipelineConfigurator
+from capillary import pipeline, _sentinel
+from capillary.tasks import concat, dict_reducer, generator, lazy_async_apply_map
 
 
 class DummyScanner(object):

@@ -1,0 +1,17 @@
+*.egg-info
+*.pid
+*.pyc
+*.log
+*~
+.DS_Store
+.Python
+.coverage
+.reviewboardrc
+.idea/
+.tox/
+bin
+build/
+dist/
+htmlcov
+include
+lib

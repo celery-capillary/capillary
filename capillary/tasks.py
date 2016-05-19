@@ -3,11 +3,12 @@
 from collections import Mapping
 
 from celery import group
+from celery.app import app_or_default
 from celery.exceptions import Ignore
 
-# FIXME - How to really get the default app? Capillary shouldn't depend on massimport
-from massimport.celery import app
-from feeds.utils import merge_dicts
+from capillary.utils import merge_dicts
+
+app = app_or_default()
 
 
 @app.task(bind=True)
@@ -62,15 +63,15 @@ def dict_reducer(self, items):
 
 
 @app.task(bind=True)
-def sdm_reducer(self, items):
-    """Combine list of SDM dictionaries into a single dict
+def dict_reducer(self, items):
+    """Combine list of dictionaries into a single dict
 
     :param items: Single dictionary (noop) or list of dictionaries
 
     :returns dict: Single combined dictionary
     """
 
-    # print 'sdm_reducer: {}'.format(items)
+    # print 'dict_reducer: {}'.format(items)
 
     # if items is a mapping, just return it
     if isinstance(items, Mapping):
